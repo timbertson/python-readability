@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 from BeautifulSoup import NavigableString
-from page_parser import parse
+from page_parser import parse, get_title, get_body
 import logging
 import re
 
@@ -33,24 +33,38 @@ class Document:
 		self.options = defaultdict(lambda: None)
 		for k, v in options.items():
 			self.options[k] = v
+		self.html = None
 
-	def make_html(self):
-		self.html = parse(self.input, self.options['url'])
-
+	def _html(self, force=False):
+		if force or self.html is None:
+			self.html = parse(self.input, self.options['url'])
+		return self.html
+	
 	def content(self):
+		return get_body(self._html())
+	
+	def title(self):
+		return get_title(self._html())
+
+	def summary(self):
 		ruthless = True
 		while True:
-			self.make_html()
+			self._html(True)
 			[i.extract() for i in self.tags(self.html, 'script', 'style')]
 
 			if ruthless: self.remove_unlikely_candidates()
 			self.transform_misused_divs_into_paragraphs()
 			candidates = self.score_paragraphs(self.options.get('min_text_length', self.TEXT_LENGTH_THRESHOLD))
 			best_candidate = self.select_best_candidate(candidates)
-			if ruthless and best_candidate is None:
-				ruthless = False
-				continue
-			article = self.get_article(candidates, best_candidate)
+			if best_candidate:
+				article = self.get_article(candidates, best_candidate)
+			else:
+				if ruthless:
+					ruthless = False
+					# try again
+					continue
+				else:
+					article = self.html.find('body') or self.html
 
 			cleaned_article = self.sanitize(article, candidates)
 			of_acceptable_length = len(cleaned_article or '') >= (self.options['retry_length'] or self.RETRY_LENGTH)
@@ -88,16 +102,19 @@ class Document:
 			if append:
 				output.append(sibling)
 
+		if not output: output.append(best_candidate)
 		return output
 
 	def select_best_candidate(self, candidates):
 		sorted_candidates = sorted(candidates.values(), key=lambda x: x['content_score'], reverse=True)
-		self.debug("Top 5 canidates:")
+		self.debug("Top 5 candidates:")
 		for candidate in sorted_candidates[:5]:
 			elem = candidate['elem']
 			self.debug("Candidate %s with score %s" % (describe(elem), candidate['content_score']))
 
-		best_candidate = sorted_candidates[0] if len(sorted_candidates) > 1 else { 'elem': self.html.find("body"), 'content_score': 0 }
+		if len(sorted_candidates) == 0:
+			return None
+		best_candidate = sorted_candidates[0]
 		self.debug("Best candidate %s with score %s" % (describe(best_candidate['elem']), best_candidate['content_score']))
 		return best_candidate
 
@@ -108,7 +125,7 @@ class Document:
 
 	def score_paragraphs(self, min_text_length):
 		candidates = {}
-		elems = self.html.findAll("p") + self.html.findAll("td")
+		elems = self.tags(self.html, "p","td")
 
 		for elem in elems:
 			parent_node = elem.parent
@@ -201,7 +218,7 @@ class Document:
 		for header in self.tags(node, "h1", "h2", "h3", "h4", "h5", "h6"):
 			if self.class_weight(header) < 0 or self.get_link_density(header) > 0.33: header.extract()
 
-		for elem in self.tags(node, "form", "object", "iframe", "embed"):
+		for elem in self.tags(node, "form", "iframe"):
 			elem.extract()
 
 		# remove empty <p> tags
@@ -265,7 +282,7 @@ class Document:
 			if not (self.options['attributes']):
 				el.attrMap = {}
 
-		return str(node)
+		return unicode(node)
 
 class HashableElement():
 	def __init__(self, node):
@@ -312,7 +329,7 @@ def main():
 	else:
 		file = open(args[0])
 	try:
-		print Document(file.read(), debug=options.verbose).content()
+		print Document(file.read(), debug=options.verbose).summary().encode('ascii','ignore')
 	finally:
 		file.close()
 
