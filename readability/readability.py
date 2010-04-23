@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 from BeautifulSoup import NavigableString
 from page_parser import parse
+import logging
 import re
 
 REGEXES = { 'unlikelyCandidatesRe': re.compile('combx|comment|disqus|foot|header|menu|meta|nav|rss|shoutbox|sidebar|sponsor',re.I),
@@ -32,28 +33,32 @@ class Document:
 		self.options = defaultdict(lambda: None)
 		for k, v in options.items():
 			self.options[k] = v
-		self.make_html()
 
 	def make_html(self):
 		self.html = parse(self.input, self.options['url'])
 
-	def content(self, remove_unlikely_candidates = True):
-		def remove(tag): [i.extract() for i in self.html.findAll(tag)]
-		remove('script')
-		remove('style')
-
-		if remove_unlikely_candidates: self.remove_unlikely_candidates()
-		self.transform_misused_divs_into_paragraphs()
-		candidates = self.score_paragraphs(self.options.get('min_text_length', self.TEXT_LENGTH_THRESHOLD))
-		best_candidate = self.select_best_candidate(candidates)
-		article = self.get_article(candidates, best_candidate)
-
-		cleaned_article = self.sanitize(article, candidates)
-		if remove_unlikely_candidates and len(cleaned_article or '') < (self.options['retry_length'] or self.RETRY_LENGTH):
+	def content(self):
+		ruthless = True
+		while True:
 			self.make_html()
-			return self.content(False)
-		else:
-			return cleaned_article
+			[i.extract() for i in self.tags(self.html, 'script', 'style')]
+
+			if ruthless: self.remove_unlikely_candidates()
+			self.transform_misused_divs_into_paragraphs()
+			candidates = self.score_paragraphs(self.options.get('min_text_length', self.TEXT_LENGTH_THRESHOLD))
+			best_candidate = self.select_best_candidate(candidates)
+			if ruthless and best_candidate is None:
+				ruthless = False
+				continue
+			article = self.get_article(candidates, best_candidate)
+
+			cleaned_article = self.sanitize(article, candidates)
+			of_acceptable_length = len(cleaned_article or '') >= (self.options['retry_length'] or self.RETRY_LENGTH)
+			if ruthless and not of_acceptable_length:
+				ruthless = False
+				continue # try again
+			else:
+				return cleaned_article
 
 	def get_article(self, candidates, best_candidate):
 		# Now that we have the top candidate, look through its siblings for content that might also be related.
@@ -87,18 +92,13 @@ class Document:
 
 	def select_best_candidate(self, candidates):
 		sorted_candidates = sorted(candidates.values(), key=lambda x: x['content_score'], reverse=True)
-
 		self.debug("Top 5 canidates:")
 		for candidate in sorted_candidates[:5]:
 			elem = candidate['elem']
-			self.debug("Candidate %s with score %s" % (
-				describe(elem), candidate['content_score']))
+			self.debug("Candidate %s with score %s" % (describe(elem), candidate['content_score']))
 
 		best_candidate = sorted_candidates[0] if len(sorted_candidates) > 1 else { 'elem': self.html.find("body"), 'content_score': 0 }
-		elem = best_candidate['elem']
-		self.debug("Best candidate %s#%s.%s with score %s" % (
-			elem.name, elem.get('id',''), elem.get('class',''), best_candidate['content_score']))
-
+		self.debug("Best candidate %s with score %s" % (describe(best_candidate['elem']), best_candidate['content_score']))
 		return best_candidate
 
 	def get_link_density(self, elem):
@@ -173,9 +173,9 @@ class Document:
 			content_score -= 5
 		return { 'content_score': content_score, 'elem': elem }
 
-	def debug(self, str):
+	def debug(self, *a):
 		if self.options['debug']:
-			print(str)
+			logging.debug(*a)
 
 	def remove_unlikely_candidates(self):
 		for elem in self.html.findAll():
