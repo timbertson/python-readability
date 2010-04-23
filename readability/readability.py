@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-from BeautifulSoup import BeautifulSoup, NavigableString
+from BeautifulSoup import NavigableString
+from page_parser import parse
 import re
 
 REGEXES = { 'unlikelyCandidatesRe': re.compile('combx|comment|disqus|foot|header|menu|meta|nav|rss|shoutbox|sidebar|sponsor',re.I),
@@ -34,8 +35,7 @@ class Document:
 		self.make_html()
 
 	def make_html(self):
-		self.html = BeautifulSoup(self.input)
-
+		self.html = parse(self.input, self.options['url'])
 
 	def content(self, remove_unlikely_candidates = True):
 		def remove(tag): [i.extract() for i in self.html.findAll(tag)]
@@ -60,7 +60,7 @@ class Document:
 		# Things like preambles, content split by ads that we removed, etc.
 
 		sibling_score_threshold = max([10, best_candidate['content_score'] * 0.2])
-		output = BeautifulSoup("<div/>")
+		output = parse("<div/>")
 		for sibling in best_candidate['elem'].parent.contents:
 			if isinstance(sibling, NavigableString): continue
 			append = False
