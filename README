@@ -8,3 +8,7 @@ Given a html document, it pulls out the main body text and cleans it up.
 
 Ruby port by starrhorne and iterationlabs
 Python port by gfxmonk
+
+This port uses BeautifulSoup for the HTML parsing. That means it can be
+a little slow, but will work on Google App Engine (unlike libxml-based
+libraries)
