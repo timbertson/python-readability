@@ -37,7 +37,8 @@ class Document:
 
 	def _html(self, force=False):
 		if force or self.html is None:
-			self.html = parse(self.input, self.options['url'])
+			notify = self.options['notify'] or (lambda x: None)
+			self.html = parse(self.input, self.options['url'], notify=notify)
 		return self.html
 	
 	def content(self):
