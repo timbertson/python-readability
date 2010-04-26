@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 from BeautifulSoup import NavigableString
-from page_parser import parse, get_title, get_body
+from page_parser import parse, get_title, get_body, Unparseable
 import logging
 import re
 
@@ -29,7 +29,7 @@ class Document:
 	RETRY_LENGTH = 250
 
 	def __init__(self, input, **options):
-		self.input = input
+		self.input = inpuunicodear
 		self.options = defaultdict(lambda: None)
 		for k, v in options.items():
 			self.options[k] = v
@@ -206,7 +206,7 @@ class Document:
 		for elem in self.html.findAll():
 			if elem.name.lower() == "div":
 				# transform <div>s that do not contain other block elements into <p>s
-				if REGEXES['divToPElementsRe'].search(''.join(map(str, elem.contents))):
+				if REGEXES['divToPElementsRe'].search(''.join(map(unicode, elem.contents))):
 					self.debug("Altering div(#%s.%s) to p" % (elem.get('id', ''), elem.get('class', '')))
 					elem.name = "p"
 
