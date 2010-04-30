@@ -28,17 +28,17 @@ class Document:
 	TEXT_LENGTH_THRESHOLD = 25
 	RETRY_LENGTH = 250
 
-	def __init__(self, input, **options):
-		self.input = inpuunicodear
+	def __init__(self, input, notify=None, **options):
+		self.input = input
 		self.options = defaultdict(lambda: None)
 		for k, v in options.items():
 			self.options[k] = v
+		self.notify = notify or logging.info
 		self.html = None
 
 	def _html(self, force=False):
 		if force or self.html is None:
-			notify = self.options['notify'] or (lambda x: None)
-			self.html = parse(self.input, self.options['url'], notify=notify)
+			self.html = parse(self.input, self.options['url'], notify=self.notify)
 		return self.html
 	
 	def content(self):
@@ -48,32 +48,36 @@ class Document:
 		return get_title(self._html())
 
 	def summary(self):
-		ruthless = True
-		while True:
-			self._html(True)
-			[i.extract() for i in self.tags(self.html, 'script', 'style')]
+		try:
+			ruthless = True
+			while True:
+				self._html(True)
+				[i.extract() for i in self.tags(self.html, 'script', 'style')]
 
-			if ruthless: self.remove_unlikely_candidates()
-			self.transform_misused_divs_into_paragraphs()
-			candidates = self.score_paragraphs(self.options.get('min_text_length', self.TEXT_LENGTH_THRESHOLD))
-			best_candidate = self.select_best_candidate(candidates)
-			if best_candidate:
-				article = self.get_article(candidates, best_candidate)
-			else:
-				if ruthless:
-					ruthless = False
-					# try again
-					continue
+				if ruthless: self.remove_unlikely_candidates()
+				self.transform_misused_divs_into_paragraphs()
+				candidates = self.score_paragraphs(self.options.get('min_text_length', self.TEXT_LENGTH_THRESHOLD))
+				best_candidate = self.select_best_candidate(candidates)
+				if best_candidate:
+					article = self.get_article(candidates, best_candidate)
 				else:
-					article = self.html.find('body') or self.html
+					if ruthless:
+						ruthless = False
+						# try again
+						continue
+					else:
+						article = self.html.find('body') or self.html
 
-			cleaned_article = self.sanitize(article, candidates)
-			of_acceptable_length = len(cleaned_article or '') >= (self.options['retry_length'] or self.RETRY_LENGTH)
-			if ruthless and not of_acceptable_length:
-				ruthless = False
-				continue # try again
-			else:
-				return cleaned_article
+				cleaned_article = self.sanitize(article, candidates)
+				of_acceptable_length = len(cleaned_article or '') >= (self.options['retry_length'] or self.RETRY_LENGTH)
+				if ruthless and not of_acceptable_length:
+					ruthless = False
+					continue # try again
+				else:
+					return cleaned_article
+		except StandardError, e:
+			logging.exception('error getting summary:')
+			raise Unparseable(str(e))
 
 	def get_article(self, candidates, best_candidate):
 		# Now that we have the top candidate, look through its siblings for content that might also be related.
@@ -322,6 +326,7 @@ def main():
 	if not (len(args) == 1 or options.url):
 		parser.print_help()
 		sys.exit(1)
+	logging.basicConfig(level=logging.DEBUG)
 
 	file = None
 	if options.url:
