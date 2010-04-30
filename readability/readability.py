@@ -24,6 +24,9 @@ def describe(node):
 	return "%s#%s.%s" % (
 		node.name, node.get('id', ''), node.get('class',''))
 
+def _text(node):
+	return " ".join(node.findAll(text=True))
+
 class Document:
 	TEXT_LENGTH_THRESHOLD = 25
 	RETRY_LENGTH = 250
@@ -63,6 +66,7 @@ class Document:
 				else:
 					if ruthless:
 						ruthless = False
+						self.debug("ended up stripping too much - going for a safer parse")
 						# try again
 						continue
 					else:
@@ -125,7 +129,7 @@ class Document:
 
 	def get_link_density(self, elem):
 		link_length = len("".join([i.text or "" for i in elem.findAll("a")]))
-		text_length = len(elem.text or "")
+		text_length = len(_text(elem))
 		return float(link_length) / max(text_length, 1)
 
 	def score_paragraphs(self, min_text_length):
@@ -138,7 +142,7 @@ class Document:
 			parent_key = HashableElement(parent_node)
 			grand_parent_key = HashableElement(grand_parent_node)
 
-			inner_text = elem.string
+			inner_text = _text(elem)
 
 			# If this paragraph is less than 25 characters, don't even count it.
 			if (not inner_text) or len(inner_text) < min_text_length:
@@ -160,7 +164,8 @@ class Document:
 		# Scale the final candidates score based on link density. Good content should have a
 		# relatively small link density (5% or less) and be mostly unaffected by this operation.
 		for elem, candidate in candidates.items():
-			candidate['content_score'] = candidate['content_score'] * (1 - self.get_link_density(elem))
+			candidate['content_score'] *= (1 - self.get_link_density(elem))
+			self.debug("candidate %s scored %s" % (describe(elem), candidate['content_score']))
 
 		return candidates
 
@@ -201,7 +206,7 @@ class Document:
 
 	def remove_unlikely_candidates(self):
 		for elem in self.html.findAll():
-			s = "%s%s" % (elem.get('class', ''), elem.get('id'))
+			s = "%s%s" % (elem.get('class', ''), elem.get('id', ''))
 			if REGEXES['unlikelyCandidatesRe'].search(s) and (not REGEXES['okMaybeItsACandidateRe'].search(s)) and elem.name != 'body':
 				self.debug("Removing unlikely candidate - %s" % (s,))
 				elem.extract()
@@ -245,13 +250,13 @@ class Document:
 				el.extract()
 				self.debug("Conditionally cleaned %s with weight %s and content score %s because score + content score was less than zero." %
 					(describe(el), weight, content_score))
-			elif len((el.text or "").split(",")) < 10:
+			elif len(_text(el).split(",")) < 10:
 				counts = {}
 				for kind in ['p', 'img', 'li', 'a', 'embed', 'input']:
 					counts[kind] = len(el.findAll(kind))
 				counts["li"] -= 100
 
-				content_length = len(el.text or "") # Count the text length excluding any surrounding whitespace
+				content_length = len(_text(el)) # Count the text length excluding any surrounding whitespace
 				link_density = self.get_link_density(el)
 				to_remove = False
 				reason = ""
