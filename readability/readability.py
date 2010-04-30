@@ -231,11 +231,6 @@ class Document:
 		for elem in self.tags(node, "form", "iframe"):
 			elem.extract()
 
-		# remove empty <p> tags
-		for elem in node.findAll("p"):
-			if not (elem.string or elem.contents):
-				elem.extract()
-
 		# Conditionally clean <table>s, <ul>s, and <div>s
 		for el in self.tags(node, "table", "ul", "div"):
 			weight = self.class_weight(el)
