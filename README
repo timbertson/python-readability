@@ -12,3 +12,9 @@ Python port by gfxmonk
 This port uses BeautifulSoup for the HTML parsing. That means it can be
 a little slow, but will work on Google App Engine (unlike libxml-based
 libraries)
+
+
+**note**: I don't currently have any plans for using or improving this
+library, and it's far from perfect (slow, and almost certainly buggy).
+So if you do something cool with it or have a better tool that does
+the same job, please let me know and I can link to it from here.
