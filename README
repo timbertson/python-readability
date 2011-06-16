@@ -19,5 +19,6 @@ library, and it's far from perfect (slow, and almost certainly buggy).
 So if you do something cool with it or have a better tool that does
 the same job, please let me know and I can link to it from here.
 
-If you're looking for alternatives, here's the list so far:
+If you're looking for alternatives / forks, here's the list so far:
  - http://www.minvolai.com/blog/decruft-arc90s-readability-in-python/
+ - https://github.com/buriy/python-readability
